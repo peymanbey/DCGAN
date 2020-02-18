@@ -1,2 +1,4 @@
 *.p
 */.ipynb_checkpoints/*
+*/data/*
+*.pyc
