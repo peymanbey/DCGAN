@@ -94,14 +94,17 @@ def weights_init(m):
         nn.init.constant_(m.bias.data, 0)
 
 
-def D_loss(batch, label, network, criterion, device):
+def D_loss(output, label, criterion, device):
+    # def D_loss(batch, label, network, criterion, device):
 
-    b_size = batch.size(0)
+    # b_size = batch.size(0)
+    b_size = output.view(-1).size(0)
     target_label = torch.full((b_size,), label, device=device)
-    output, f1, f2 = network(batch)
+    # output, f1, f2 = network(batch)
     loss = criterion(output.view(-1), target_label)
 
-    return loss, output, f1, f2
+    # return loss, output, f1, f2
+    return loss
 
 
 def batch_fake_samples(batchSize, network, nz, device):
