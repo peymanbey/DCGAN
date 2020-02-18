@@ -26,7 +26,7 @@ def D_loss(output_real, output_fake, real_label, fake_label, device):
                         fake_label,
                         device)
 
-    return errD_real + errD_fake, errD_real, output_fake
+    return errD_real + errD_fake
 
 
 def G_loss(output, real_label, device):
