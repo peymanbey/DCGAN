@@ -64,7 +64,7 @@ class Discriminator(nn.Module):
         self.classifier = nn.Sequential(
             # state size. (ndf*8) x 4 x 4
             nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-            nn.Tanh()
+            nn.Sigmoid()
         )
 
     def forward(self, input):
