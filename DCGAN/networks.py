@@ -1,3 +1,5 @@
+import torch.nn.init as init
+import torch.nn as nn
 from torch import nn
 import torch
 # the generator
@@ -92,3 +94,53 @@ def weights_init(m):
     elif classname.find('BatchNorm') != -1:
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
+
+
+class MinibatchDiscrimination(nn.Module):
+    def __init__(self, in_features, out_features, kernel_dims, mean=False):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.kernel_dims = kernel_dims
+        self.mean = mean
+        self.T = nn.Parameter(torch.Tensor(
+            in_features, out_features, kernel_dims))
+        init.normal_(self.T, 0, 1)
+
+    def forward(self, x):
+        # x is NxA
+        # T is AxBxC
+        matrices = x.mm(self.T.view(self.in_features, -1))
+        matrices = matrices.view(-1, self.out_features, self.kernel_dims)
+
+        M = matrices.unsqueeze(0)  # 1xNxBxC
+        M_T = M.permute(1, 0, 2, 3)  # Nx1xBxC
+        norm = torch.abs(M - M_T).sum(3)  # NxNxB
+        expnorm = torch.exp(-norm)
+        o_b = (expnorm.sum(0) - 1)   # NxB, subtract self distance
+        if self.mean:
+            o_b /= x.size(0) - 1
+
+        x = torch.cat([x, o_b], 1)
+        return x
+
+
+class Discriminator_miniBatchDiscrimination(Discriminator):
+    def __init__(self, ngpu, nc, ndf):
+        super(Discriminator_miniBatchDiscrimination,
+              self).__init__(ngpu, nc, ndf)
+
+        self.classifier = nn.Sequential(
+            # Minibatch discrimination
+            # state size. (ndf*8) x 4 x 4
+            MinibatchDiscrimination(ndf * 8 * 4 * 4, ndf, ndf, mean=False),
+            nn.Linear(ndf * 8 * 4 * 4 + ndf, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, input):
+        f1 = self.features1(input)
+        f2 = self.features2(f1)
+        # minibatch discrimination
+        cls = self.classifier(f2.view(f2.shape[0], -1))
+        return cls, f1, f2
