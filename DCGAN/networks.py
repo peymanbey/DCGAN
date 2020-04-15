@@ -30,8 +30,8 @@ class DCGAN(GAN):
         return self.generate(noise)
 
     def discriminator_loss(self, real_batch, fake_batch):
-        output_real, f1real, f2real = self.discriminate(real_batch)
-        output_fake, _, _ = self.discriminate(fake_batch.detach())
+        output_real, _, _ = self.discriminate(real_batch)
+        output_fake, _, _ = self.discriminate(fake_batch)
         return D_loss(output_real, output_fake,
                       self.real_label, self.fake_label, self.pFlip,
                       self.label_smoothing, self.device)
@@ -42,7 +42,7 @@ class DCGAN(GAN):
         return combined_G_loss(output, self.real_label, self.label_smoothing,
                                self.device,
                                f1fake, f2fake,
-                               f1real, f2real,
+                               f1real.detach(), f2real.detach(),
                                self.double_layer)
 
 

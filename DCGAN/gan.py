@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import time
 
 
 class GAN():
@@ -146,7 +147,7 @@ class trainer_GAN():
     def __init__(self,
                  gan, train_loader,
                  disc_optim, gen_optim,
-                 D_loss_ceiling=.8
+                 D_loss_ceiling=.8, epochs=5
                  ):
         self.gan = gan
         self.train_loader = train_loader
@@ -155,6 +156,65 @@ class trainer_GAN():
         self.real_batch = None
         self.batch_size = None
         self.D_loss_ceiling = D_loss_ceiling
+        self.epochs = epochs
+
+    def train(self):
+        for i in range(self.epochs):
+
+            epoch_start = time.time()
+
+            self.train_epoch()
+
+            print("epoch {}/{} time {}".format(
+                i, self.epochs, time.time()-epoch_start))
+
+    def train_epoch(self):
+
+        batch_start = time.time()
+        for ix, data in enumerate(self.train_loader, 0):
+
+            self.real_batch = data[0].to(self.gan.device)
+            self.batch_size = self.real_batch.size(0)
+            errD, errG = self.train_batch()
+
+            if ix % 50 == 0:
+                print('[{:0>4}/{:0>4}]  Loss_D: {:.3f}  Loss_G: {:.3f} t={:6.3f}'.format(
+                    ix, len(self.train_loader), errD, errG, time.time()-batch_start, prec=3))
+                batch_start = time.time()
+
+    def train_batch(self):
+        errs = []
+        errD = self.train_discriminator()
+        errs.append(errD)
+        # if discriminator loss is low enough, trian generator
+        if errD < self.D_loss_ceiling:
+            errG = self.train_generator()
+            errs.append(errG)
+        else:
+            errs.append(0)
+        return errs
+
+    def train_discriminator(self):
+        fake_batch = self.fake_batch_gen()
+
+        # Detach in fake_batch.detach() serves the purpose of avoiding
+        # gradient computation w.r.t params of G. Note that even if do not
+        # detach, the training of D is normal as the disc_optim should have
+        # been defined only on parameters of D.
+        errD = self.gan.discriminator_loss(self.real_batch,
+                                           fake_batch.detach())
+
+        self.update_params(self.disc_optim, errD)
+        return errD.item()
+
+    def train_generator(self):
+        fake_batch = self.fake_batch_gen()
+        # Detach is not needed for fake_batch because you are training
+        # the G network
+        errG = self.gan.generator_loss(self.real_batch,
+                                       fake_batch)
+        self.update_params(self.gen_optim, errG)
+        return errG.item()
 
     def fake_batch_gen(self):
         """return a batch of fake images
@@ -173,28 +233,3 @@ class trainer_GAN():
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
-    def train_discriminator(self):
-        fake_batch = self.fake_batch_gen()
-        errD = self.gan.discriminator_loss(
-            self.real_batch, fake_batch.detach())
-        self.update_params(self.disc_optim, errD)
-        return errD.item()
-
-    def train_generator(self):
-        fake_batch = self.fake_batch_gen()
-        errG = self.gan.generator_loss(self.real_batch, fake_batch.detach())
-        self.update_params(self.gen_optim, errG)
-
-    def train_batch(self):
-        # train on one batch of real data
-        errD = self.train_discriminator()
-        # if discriminator loss is low enough, trian generator
-        if errD < self.D_loss_ceiling:
-            self.train_generator()
-
-    def train_epoch(self):
-        for ix, data in enumerate(self.train_loader, 0):
-            self.real_batch = data[0].to(self.gan.device)
-            self.batch_size = self.real_batch.size(0)
-            self.train_batch()
