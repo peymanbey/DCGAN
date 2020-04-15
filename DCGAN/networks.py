@@ -1,14 +1,59 @@
-import torch.nn.init as init
+from losses import combined_G_loss
+from losses import D_loss
 import torch.nn as nn
-from torch import nn
 import torch
-# the generator
+from gan import GAN, MinibatchDiscrimination
+
+
+class DCGAN(GAN):
+    def __init__(self, generator, discriminator, device,
+                 real_label, fake_label, pFlip,
+                 label_smoothing, double_layer=False):
+        super(DCGAN, self).__init__(generator, discriminator, device)
+        self.real_label = real_label
+        self.fake_label = fake_label
+        self.pFlip = pFlip
+        self.label_smoothing = label_smoothing
+        self.double_layer = double_layer
+
+    def discriminate(self, batch_img):
+        return self.discriminator(batch_img)
+
+    def generate(self, latent_vec):
+        return self.generator(latent_vec)
+
+    def fake_batch(self, batchSize):
+        # Generate a batch of random latent vectors
+        noise = torch.randn(batchSize, self.generator.nz, 1, 1,
+                            device=self.device)
+        # Generate fake image batch with network
+        return self.generate(noise)
+
+    def discriminator_loss(self, real_batch, fake_batch):
+        output_real, f1real, f2real = self.discriminate(real_batch)
+        output_fake, _, _ = self.discriminate(fake_batch.detach())
+        return D_loss(output_real, output_fake,
+                      self.real_label, self.fake_label, self.pFlip,
+                      self.label_smoothing, self.device)
+
+    def generator_loss(self, real_batch, fake_batch):
+        _, f1real, f2real = self.discriminate(real_batch)
+        output, f1fake, f2fake = self.discriminate(fake_batch)
+        return combined_G_loss(output, self.real_label, self.label_smoothing,
+                               self.device,
+                               f1fake, f2fake,
+                               f1real, f2real,
+                               self.double_layer)
 
 
 class Generator(nn.Module):
     def __init__(self, ngpu, nz, ngf, nc):
         super(Generator, self).__init__()
         self.ngpu = ngpu
+        # input random vector size
+        self.nz = nz
+        # output channel size
+        self.nc = nc
         self.main = nn.Sequential(
             # input is Z, going into a convolution
             nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
@@ -96,38 +141,9 @@ def weights_init(m):
         nn.init.constant_(m.bias.data, 0)
 
 
-class MinibatchDiscrimination(nn.Module):
-    def __init__(self, in_features, out_features, kernel_dims, mean=False):
-        super().__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.kernel_dims = kernel_dims
-        self.mean = mean
-        self.T = nn.Parameter(torch.Tensor(
-            in_features, out_features, kernel_dims))
-        init.normal_(self.T, 0, 1)
-
-    def forward(self, x):
-        # x is NxA
-        # T is AxBxC
-        matrices = x.mm(self.T.view(self.in_features, -1))
-        matrices = matrices.view(-1, self.out_features, self.kernel_dims)
-
-        M = matrices.unsqueeze(0)  # 1xNxBxC
-        M_T = M.permute(1, 0, 2, 3)  # Nx1xBxC
-        norm = torch.abs(M - M_T).sum(3)  # NxNxB
-        expnorm = torch.exp(-norm)
-        o_b = (expnorm.sum(0) - 1)   # NxB, subtract self distance
-        if self.mean:
-            o_b /= x.size(0) - 1
-
-        x = torch.cat([x, o_b], 1)
-        return x
-
-
-class Discriminator_miniBatchDiscrimination(Discriminator):
+class DiscriminatorMiniBatchDiscrimination(Discriminator):
     def __init__(self, ngpu, nc, ndf):
-        super(Discriminator_miniBatchDiscrimination,
+        super(DiscriminatorMiniBatchDiscrimination,
               self).__init__(ngpu, nc, ndf)
 
         self.classifier = nn.Sequential(

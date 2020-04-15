@@ -3,7 +3,6 @@ import numpy as np
 import torchvision.utils as vutils
 from torchvision.datasets import CIFAR10, MNIST
 from torch.utils.data import DataLoader
-from torch import nn
 
 
 def visual_data(batch, device):
@@ -20,8 +19,9 @@ def visual_data(batch, device):
     plt.figure(figsize=(12, 12))
     plt.axis("off")
     plt.title("Training Images")
-    plt.imshow(np.transpose(vutils.make_grid(batch[0].to(device)[:64],
-                                             padding=2, normalize=True).cpu(), (1, 2, 0)))
+    plt.imshow(np.transpose(vutils.make_grid(
+        batch[0].to(device)[:64],
+        padding=2, normalize=True).cpu(), (1, 2, 0)))
 
 
 def load_mnist(mnistFolder, tsfms, batchSize=64, numWorkers=0):

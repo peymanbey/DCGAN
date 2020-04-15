@@ -49,7 +49,8 @@ def halfBCE(output, label, device, label_smoothing, pFlip):
     return loss
 
 
-def D_loss(output_real, output_fake, real_label, fake_label, pFlip, label_smoothing, device):
+def D_loss(output_real, output_fake, real_label, fake_label, pFlip,
+           label_smoothing, device):
     # all-real batch
     errD_real = halfBCE(output_real,
                         real_label,
@@ -80,5 +81,16 @@ def G_featMatch_loss(f1fake, f2fake, f1real, f2real, double_layer=False):
     if double_layer:
         fm_loss1 = feature_matching_criterion(f1fake, f1real)
         loss += fm_loss1
+
+    return loss
+
+
+def combined_G_loss(
+        output, real_label, label_smoothing, device,
+        f1fake, f2fake, f1real, f2real, double_layer=False):
+    loss = .1*G_loss(output, real_label, label_smoothing, device)
+    loss += G_featMatch_loss(
+        f1fake, f2fake, f1real, f2real, double_layer
+    )
 
     return loss
