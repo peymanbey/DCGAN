@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch import nn
 import time
@@ -157,6 +158,8 @@ class trainer_GAN():
         self.batch_size = None
         self.D_loss_ceiling = D_loss_ceiling
         self.epochs = epochs
+        self.errD = np.inf
+        self.errG = np.inf
 
     def train(self):
         for i in range(self.epochs):
@@ -175,24 +178,21 @@ class trainer_GAN():
 
             self.real_batch = data[0].to(self.gan.device)
             self.batch_size = self.real_batch.size(0)
-            errD, errG = self.train_batch()
+            self.train_batch()
 
             if ix % 50 == 0:
                 print('[{:0>4}/{:0>4}]  Loss_D: {:.3f}  Loss_G: {:.3f} t={:6.3f}'.format(
-                    ix, len(self.train_loader), errD, errG, time.time()-batch_start, prec=3))
+                    ix, len(self.train_loader), self.errD, self.errG, time.time()-batch_start, prec=3))
                 batch_start = time.time()
 
     def train_batch(self):
         errs = []
-        errD = self.train_discriminator()
-        errs.append(errD)
+        self.train_discriminator()
+        errs.append(self.errD)
         # if discriminator loss is low enough, trian generator
-        if errD < self.D_loss_ceiling:
-            errG = self.train_generator()
-            errs.append(errG)
-        else:
-            errs.append(0)
-        return errs
+        if self.errD < self.D_loss_ceiling:
+            self.train_generator()
+        errs.append(self.errG)
 
     def train_discriminator(self):
         fake_batch = self.fake_batch_gen()
@@ -205,7 +205,7 @@ class trainer_GAN():
                                            fake_batch.detach())
 
         self.update_params(self.disc_optim, errD)
-        return errD.item()
+        self.errD = errD.item()
 
     def train_generator(self):
         fake_batch = self.fake_batch_gen()
@@ -214,7 +214,7 @@ class trainer_GAN():
         errG = self.gan.generator_loss(self.real_batch,
                                        fake_batch)
         self.update_params(self.gen_optim, errG)
-        return errG.item()
+        self.errG = errG.item()
 
     def fake_batch_gen(self):
         """return a batch of fake images
